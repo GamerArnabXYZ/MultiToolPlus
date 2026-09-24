@@ -1,0 +1,96 @@
+name: Build & Release Separated APKs
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build Separated APKs & Create Release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: |
+          if [ -f "./gradlew" ]; then
+            chmod +x gradlew
+          fi
+
+      - name: Build Universal & Per-ABI APKs
+        run: |
+          # Build universal debug apk
+          if [ -f "./gradlew" ]; then
+            ./gradlew assembleDebug --no-daemon --stacktrace
+          else
+            gradle assembleDebug --no-daemon --stacktrace
+          fi
+
+      - name: Organize and Prepare Release APKs
+        run: |
+          mkdir -p release_apks
+          # Find all generated APKs and copy with clean descriptive names
+          find app/build/outputs/apk -type f -name "*.apk" | while read -r apk_file; do
+            filename=$(basename "$apk_file")
+            echo "Found APK: $apk_file"
+            cp "$apk_file" "release_apks/MultiToolPlus-$filename"
+          done
+          
+          # Create a dedicated universal APK copy
+          if [ -f "app/build/outputs/apk/debug/app-debug.apk" ]; then
+            cp "app/build/outputs/apk/debug/app-debug.apk" "release_apks/MultiToolPlus-Universal.apk"
+          fi
+
+          echo "APKs ready for release:"
+          ls -la release_apks/
+
+      - name: Generate Release Tag & Name
+        id: release_info
+        run: |
+          TAG_NAME="v1.0.${{ github.run_number }}"
+          echo "tag_name=${TAG_NAME}" >> $GITHUB_OUTPUT
+          echo "release_name=MultiToolPlus ${TAG_NAME}" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: MultiToolPlus-All-APKs
+          path: release_apks/*.apk
+          retention-days: 14
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.release_info.outputs.tag_name }}
+          name: ${{ steps.release_info.outputs.release_name }}
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+          files: release_apks/*.apk
+          body: |
+            ### 🚀 MultiToolPlus Automated Release (${{ steps.release_info.outputs.tag_name }})
+            
+            This release was automatically compiled and published on push to `main`.
+            
+            #### 📱 Download APKs:
+            - **MultiToolPlus-Universal.apk**: Works on all Android devices (recommended for easy install).
+            - Includes all tools: QR Scanner, QR Generator, PDF to Image, Image to PDF, Compressor, Compass & Level, Stopwatch, Flashlight, Bill Splitter, Unit Converter, Text Utilities & Password Vault.
+            
+            *Directly downloadable from your mobile browser without needing a computer.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

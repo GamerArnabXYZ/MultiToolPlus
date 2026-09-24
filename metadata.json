@@ -1,0 +1,6 @@
+{
+  "name": "Multi Tool Plus",
+  "description": "Offline native multi-tool utility featuring PDF to image, image compressor, image to PDF, QR studio, and text utilities with Bright and Dark mode support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
